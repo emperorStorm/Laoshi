@@ -208,8 +208,11 @@ func validateFields(entity string, data map[string]any, deleted bool, updatedAt,
 		if err := validateTaskJSON(data); err != nil {
 			return err
 		}
-		if data["scheduleKind"] != "all_day" && (data["plannedDate"] == nil || data["plannedTime"] == nil) {
-			return fmt.Errorf("定时事项缺少日期或时间")
+		if data["scheduleKind"] == "point" && (data["plannedDate"] == nil || data["plannedTime"] == nil) {
+			return fmt.Errorf("时间点事项缺少日期或时间")
+		}
+		if data["scheduleKind"] == "range" && data["plannedDate"] == nil {
+			return fmt.Errorf("时间段事项缺少日期")
 		}
 		if data["scheduleKind"] == "range" && data["plannedEndTime"] == nil {
 			return fmt.Errorf("时间段缺少结束时间")
