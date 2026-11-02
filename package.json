@@ -1,6 +1,6 @@
 {
-  "name": "suiworks",
-  "version": "1.0.0",
+  "name": "laoshi",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,8 @@
     "build": "npm run typecheck && npm run content:validate && vite-ssg build && tsx scripts/check-build.ts",
     "preview": "tsx scripts/preview.ts",
     "test:e2e": "playwright test",
-    "package:deploy": "npm run build && node scripts/package-deploy.mjs"
+    "package:deploy": "npm run build && node scripts/package-deploy.mjs",
+    "package:deploy:api": "npm run build && INCLUDE_API=1 node scripts/package-deploy.mjs"
   },
   "dependencies": {
     "@unhead/vue": "^2.0.0",

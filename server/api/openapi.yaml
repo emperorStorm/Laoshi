@@ -1,0 +1,310 @@
+openapi: 3.1.0
+info:
+  title: Laoshi Sui Time API
+  version: 1.0.0
+  description: |
+    Go modular monolith. JSON timestamps are Unix milliseconds and integers stay
+    within JavaScript's safe range. Sync uses last-write-wins by (updatedAt,
+    deviceId), comparing device IDs lexicographically; equal versions are retries.
+    Entity data is a full snapshot. Tombstones are retained. References are IDs
+    within the account namespace; uploads may precede their dependencies.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      operationId: register
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/Credentials' }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/Credentials' }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '204': { description: Current bearer session revoked; no response body }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      operationId: me
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, serverTime]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  serverTime: { $ref: '#/components/schemas/Timestamp' }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sui-time/sync/state:
+    get:
+      operationId: syncState
+      responses:
+        '200':
+          description: Tombstones make remoteEmpty false; counts contain only live snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [remoteEmpty, counts, serverTime]
+                properties:
+                  remoteEmpty: { type: boolean }
+                  counts:
+                    type: object
+                    required: [category, task, anniversary, anniversary_record, setting]
+                    additionalProperties: { type: integer, minimum: 0 }
+                  serverTime: { $ref: '#/components/schemas/Timestamp' }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sui-time/sync/push:
+    post:
+      operationId: push
+      description: |
+        Atomic batch, at most 200 changes and 8MiB JSON. requireEmpty checks all
+        stored snapshots including tombstones under a per-user lock. An empty
+        array is valid. Original per-entity deviceId may differ from batch deviceId.
+        Future versions beyond five minutes return clock_skew and details.serverTime.
+        Legacy desktop settings at version zero are promoted to version one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushRequest' }
+      responses:
+        '200':
+          description: Applied IDs and superseded full server snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied, superseded, seq, serverTime]
+                properties:
+                  applied:
+                    type: array
+                    items: { $ref: '#/components/schemas/EntityKey' }
+                  superseded:
+                    type: array
+                    items:
+                      allOf:
+                        - { $ref: '#/components/schemas/EntityKey' }
+                        - type: object
+                          required: [server]
+                          properties:
+                            server: { $ref: '#/components/schemas/Change' }
+                  seq: { $ref: '#/components/schemas/Cursor' }
+                  serverTime: { $ref: '#/components/schemas/Timestamp' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { description: 'remote_not_empty', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /sui-time/sync/pull:
+    get:
+      operationId: pull
+      description: |
+        Cursor advances over changelog rows. Page limit applies before deduplication,
+        so changes can contain fewer than limit entries. Each entry carries the
+        latest snapshot. Consumers must continue while hasMore is true.
+      parameters:
+        - { in: query, name: cursor, schema: { $ref: '#/components/schemas/Cursor' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, default: 200 }, description: Values above 500 are clamped to 500 }
+      responses:
+        '200':
+          description: Account-scoped page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [changes, nextCursor, hasMore, serverTime]
+                properties:
+                  changes: { type: array, items: { $ref: '#/components/schemas/Change' } }
+                  nextCursor: { $ref: '#/components/schemas/Cursor' }
+                  hasMore: { type: boolean }
+                  serverTime: { $ref: '#/components/schemas/Timestamp' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, description: Opaque random session token }
+  requestBodies:
+    Credentials:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Credentials' }
+  responses:
+    Error:
+      description: Structured error; rate limiting includes Retry-After
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Session:
+      description: Authenticated session
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, expiresAt, user, serverTime]
+            properties:
+              token: { type: string }
+              expiresAt: { $ref: '#/components/schemas/Timestamp' }
+              serverTime: { $ref: '#/components/schemas/Timestamp' }
+              user: { $ref: '#/components/schemas/User' }
+  schemas:
+    Timestamp: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    Cursor: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991, default: 0 }
+    ID: { type: string, minLength: 1, maxLength: 200, pattern: '^[\x21-\x7e]+$' }
+    DeviceID: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7e]+$' }
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [username, password, deviceId]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 32, description: Unicode letters and numbers plus underscore dot and hyphen; trimmed; case-insensitive uniqueness }
+        password: { type: string, minLength: 8, maxLength: 72 }
+        deviceId: { $ref: '#/components/schemas/DeviceID' }
+        deviceName: { type: string, description: Truncated to 64 Unicode characters }
+        platform: { type: string, description: Truncated to 64 Unicode characters }
+    User:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    EntityKey:
+      type: object
+      required: [entity, id]
+      properties:
+        entity: { type: string, enum: [category, task, anniversary, anniversary_record, setting] }
+        id: { $ref: '#/components/schemas/ID' }
+    Change:
+      allOf:
+        - { $ref: '#/components/schemas/EntityKey' }
+        - type: object
+          required: [updatedAt, data]
+          properties:
+            updatedAt: { type: integer, minimum: 0, maximum: 9007199254740991, description: Zero accepted only for legacy live desktop settings }
+            deletedAt: { type: [integer, 'null'], minimum: 1, description: Must not exceed updatedAt }
+            deviceId: { $ref: '#/components/schemas/DeviceID' }
+            data:
+              anyOf:
+                - { $ref: '#/components/schemas/CategoryData' }
+                - { $ref: '#/components/schemas/TaskData' }
+                - { $ref: '#/components/schemas/AnniversaryData' }
+                - { $ref: '#/components/schemas/RecordData' }
+                - { $ref: '#/components/schemas/SettingData' }
+    PushRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceId, changes]
+      properties:
+        deviceId: { $ref: '#/components/schemas/DeviceID' }
+        requireEmpty: { type: boolean, default: false }
+        changes: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/Change' } }
+    CategoryData:
+      type: object
+      required: [name, color]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        color: { type: string, minLength: 1, maxLength: 32 }
+        icon: { type: string, minLength: 1, maxLength: 32, default: tags }
+        sortOrder: { type: integer, minimum: 0, default: 0 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    TaskData:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        status: { type: string, enum: [todo, done, failed] }
+        categoryId: { type: [string, 'null'], maxLength: 200 }
+        parentTaskId: { type: [string, 'null'], maxLength: 200, description: Cannot equal entity ID }
+        plannedDate: { type: [string, 'null'], format: date }
+        plannedTime: { type: [string, 'null'], pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        plannedEndTime: { type: [string, 'null'], pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        scheduleKind: { type: string, enum: [all_day, point, range], default: all_day }
+        priority: { type: string, enum: [urgent_important, important_not_urgent, urgent_not_important, not_urgent_not_important], default: not_urgent_not_important }
+        repeatRule: { type: string, maxLength: 4000, description: JSON-encoded rule object with kind and optional interval/endMode/endDate/count/slots }
+        occurrenceOverrides: { type: string, maxLength: 1000000, description: JSON-encoded object keyed by calendar date }
+        reminderOffsets: { type: array, maxItems: 3, items: { type: integer, enum: [0, 5, 15, 30, 60, 120] } }
+        sortOrder: { type: integer, minimum: 0 }
+        failureReason: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: string, maxLength: 20000, default: '' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        completedAt: { type: [integer, 'null'], minimum: 0 }
+    AnniversaryKind: { type: string, enum: [countdown, anniversary, birthday, holiday] }
+    AnniversaryData:
+      type: object
+      required: [kind, title, date]
+      properties:
+        kind: { $ref: '#/components/schemas/AnniversaryKind' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        date: { type: string, format: date }
+        notes: { type: string, maxLength: 20000, default: '' }
+        pinned: { type: boolean, default: false }
+        theme: { type: string, enum: [sky, warm, night], default: sky }
+        photos: { type: array, maxItems: 4, items: { type: string, description: JPEG base64 data URL; 32 bytes to 300KiB decoded } }
+        coverIndex: { type: integer, minimum: 0, default: 0, description: Must address a photo; zero when photos is empty }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    RecordData:
+      type: object
+      required: [anniversaryId, date, title, kind, originalDate]
+      properties:
+        anniversaryId: { $ref: '#/components/schemas/ID' }
+        date: { type: string, format: date, description: Entity ID must equal anniversaryId + '@' + date }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        kind: { $ref: '#/components/schemas/AnniversaryKind' }
+        originalDate: { type: string, format: date }
+        notes: { type: string, maxLength: 20000, default: '' }
+        confirmedAt: { type: [integer, 'null'], minimum: 0 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    SettingData:
+      type: object
+      properties:
+        value:
+          description: |
+            show_completed.tasks/week/month are booleans; desktop.last_task_category
+            is an ID string; desktop.last_task_priority is a priority enum;
+            mobile.collapsed_groups is an array; mobile.profile and
+            mobile.new_task_defaults are objects. Tombstones allow null/missing.
+        createdAt: { $ref: '#/components/schemas/Timestamp' }

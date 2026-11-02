@@ -4,6 +4,10 @@ artifacts/
 .vite-ssg-temp/
 .env
 .env.*.local
+# 后端真实环境/凭据；仅允许无秘密示例进入版本管理。
+deploy/*.env
+deploy/*.env.*
+!deploy/*.env.example
 .DS_Store
 test-results/
 playwright-report/

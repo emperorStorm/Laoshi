@@ -45,7 +45,54 @@ async function copyWeb(source, target) {
   }
 }
 
+// API 附件采用白名单；不会递归复制 server、deploy 或真实环境文件。
+async function copyApiFiles(source, target, extension) {
+  const stat = await fs.lstat(source);
+  if (stat.isSymbolicLink()) throw new Error(`API 附件不允许符号链接：${source}`);
+  if (stat.isDirectory()) {
+    await fs.mkdir(target, { recursive: true, mode: 0o755 });
+    let count = 0;
+    for (const entry of await fs.readdir(source)) {
+      count += await copyApiFiles(path.join(source, entry), path.join(target, entry), extension);
+    }
+    return count;
+  }
+  if (!stat.isFile()) throw new Error(`API 附件仅允许普通文件：${source}`);
+  if (!extension.test(path.basename(source))) return 0;
+  const data = await fs.readFile(source);
+  if (/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/.test(data.toString('utf8'))) {
+    throw new Error(`API 附件包含私钥：${source}`);
+  }
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, data, { mode: 0o644 });
+  return 1;
+}
+
+async function packageApi() {
+  const arch = process.env.GOARCH ?? 'amd64';
+  if (!['amd64', 'arm64'].includes(arch)) throw new Error('API GOARCH 仅支持 amd64 或 arm64。');
+  const server = path.join(root, 'server');
+  const api = path.join(temporary, 'api');
+  await fs.mkdir(api, { mode: 0o755 });
+  const env = { ...process.env, GOOS: 'linux', GOARCH: arch, CGO_ENABLED: '0' };
+  // 不捕获构建失败：缺 Go、依赖下载/网络错误均阻断发布，不降级为静态包。
+  execFileSync('go', ['build', '-trimpath', '-o', path.join(api, 'laoshi-api'), './cmd/api'], {
+    cwd: server, env, stdio: 'inherit',
+  });
+  await fs.chmod(path.join(api, 'laoshi-api'), 0o755);
+  const migrations = await copyApiFiles(path.join(server, 'db', 'migrations'), path.join(api, 'db', 'migrations'), /\.sql$/i);
+  if (!migrations) throw new Error('API 包缺少迁移 SQL。');
+  await copyApiFiles(path.join(server, 'api', 'openapi.yaml'), path.join(api, 'api', 'openapi.yaml'), /^openapi\.yaml$/);
+  await copyApiFiles(path.join(root, 'deploy', 'laoshi-api.service'), path.join(temporary, 'deploy', 'laoshi-api.service'), /^laoshi-api\.service$/);
+  await copyApiFiles(path.join(root, 'deploy', 'laoshi-api.env.example'), path.join(temporary, 'deploy', 'laoshi-api.env.example'), /^laoshi-api\.env\.example$/);
+  return { goos: 'linux', goarch: arch, cgoEnabled: false, entrypoint: 'cmd/api', migration: 'embedded-goose', migrations };
+}
+
 try {
+  if (process.env.INCLUDE_API !== undefined && !['0', '1'].includes(process.env.INCLUDE_API)) {
+    throw new Error('INCLUDE_API 仅支持 0 或 1；默认只打包静态站。');
+  }
+  const includeApi = process.env.INCLUDE_API === '1';
   const builtAt = new Date().toISOString();
   const requestedId = process.env.RELEASE_ID;
   if (requestedId !== undefined && !safeId.test(requestedId)) {
@@ -80,18 +127,20 @@ try {
   const artifacts = path.join(root, 'artifacts');
   await fs.mkdir(artifacts, { recursive: true });
   if ((await fs.lstat(artifacts)).isSymbolicLink()) throw new Error('artifacts 不允许符号链接。');
-  const archive = path.join(artifacts, `suiworks-${version}.tar.gz`);
-  temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'suiworks-package-'));
+  const archive = path.join(artifacts, `laoshi-${version}.tar.gz`);
+  temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'laoshi-package-'));
   await copyWeb(dist, path.join(temporary, 'web'));
   await fs.mkdir(path.join(temporary, 'nginx'));
   for (const name of ['http.conf', 'tls.conf', 'security-headers.conf']) {
     await fs.copyFile(path.join(root, 'deploy', 'nginx', name), path.join(temporary, 'nginx', name));
   }
   await fs.copyFile(path.join(root, 'deploy', 'README.md'), path.join(temporary, 'README.md'));
-  const release = { version, appVersion, packagedAt: builtAt, siteUrl, git: { commit, dirty: status === null ? null : status.length > 0 } };
+  const api = includeApi ? await packageApi() : null;
+  const release = { version, appVersion, packagedAt: builtAt, siteUrl, api, git: { commit, dirty: status === null ? null : status.length > 0 } };
   await fs.writeFile(path.join(temporary, 'release.json'), `${JSON.stringify(release, null, 2)}\n`);
-  pendingArchive = path.join(artifacts, `.suiworks-${version}-${randomBytes(6).toString('hex')}.tmp`);
-  execFileSync('tar', ['-czf', pendingArchive, '-C', temporary, 'web', 'nginx', 'README.md', 'release.json'], {
+  pendingArchive = path.join(artifacts, `.laoshi-${version}-${randomBytes(6).toString('hex')}.tmp`);
+  const members = ['web', 'nginx', 'README.md', 'release.json', ...(includeApi ? ['api', 'deploy'] : [])];
+  execFileSync('tar', ['-czf', pendingArchive, '-C', temporary, ...members], {
     stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' },
   });
   // 硬链接以排他方式发布归档，已有同名版本绝不覆盖。

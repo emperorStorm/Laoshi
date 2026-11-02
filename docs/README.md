@@ -1,6 +1,8 @@
-# SuiWorks 原型说明
+# 师说 Laoshi 原型说明
 
-岁序工坊 SuiWorks 的静态 HTML 原型，用于保留视觉方向、信息结构与交互验收基线。正式站已采用 Vue 3 + TypeScript + Vite SSG，构建为静态文件并由 Nginx 托管；无需后端、数据库或 Redis。
+师说 Laoshi 的静态 HTML 原型用于保留视觉方向、信息结构与交互验收基线。品牌主宣言为“终身求知，以诚对话。”（Keep learning. Connect through dialogue.），理念为“学无止境，彼此为师；认真倾听，让理解发生。”。门户通过作品展示与分享连接学习和交流，提供作品详情与下载索引，当前不包含站内聊天功能。
+
+工程名为 `laoshi`，正式域名为 https://laoshi.chat。项目目录名为 `Laoshi`，GitHub 仓库地址为 https://github.com/emperorStorm/Laoshi.git。正式站采用 Vue 3 + TypeScript + Vite SSG，构建为静态文件并由 Nginx 托管；门户浏览无需后端。独立业务 API 采用 Go 模块化单体与 PostgreSQL，首先承载岁岁时光认证与同步。下面记录的是历史原型结构与当时的静态部署方向，不代表当前完整架构。
 
 ## 原型入口
 
@@ -22,17 +24,17 @@ python3 -m http.server 4310 --directory docs/prototype
 3. 验证“单页 + 右侧详情抽屉”的信息架构，以及筛选、深链接、移动端菜单等关键交互。
 4. 为正式项目沉淀稳定的作品数据字段与页面结构。
 
-本目录原型**不包含** `server/`、数据库、接口或 Vue 构建工程；正式工程位于项目根目录。
+本目录原型是历史静态设计稿，未实现 `server/`、数据库或接口；当前 Go 后端位于仓库根目录 `server/`，架构以 [`architecture.md`](architecture.md) 为准。
 
 ## 页面结构
 
 | 区块 | 内容 |
 | --- | --- |
 | Header | 品牌、01 作品 / 02 下载 / 03 关于锚点、GitHub 外链；移动端折叠菜单 |
-| Hero | 眉题、主标题「岁有其序，作有其物。」、简介、统计、CTA、竖排题记与朱砂印记 |
+| Hero | 眉题、主标题「终身求知，以诚对话。」、简介、统计、CTA、竖排题记与朱砂印记 |
 | 01 作品 | 编号区块标题、形态筛选、六张作品卡片 |
 | 02 下载与入口 | 账本式索引表：作品、形态、版本、获取 |
-| 03 关于 | 工坊自述、三条原则、正式版技术栈说明、GitHub 入口 |
+| 03 关于 | 品牌释义、终身求知／彼此为师／以诚对话三项主张、软件制作原则、GitHub 入口 |
 | Footer | 品牌、题记、导航、版权与原型版本 |
 | 详情抽屉 | 作品简介、六项能力、平台与形态、技术栈、界面截图、下载 / GitHub / 在线原型 |
 
@@ -112,9 +114,9 @@ docs/prototype/
 ├── index.html                 # 语义骨架，卡片与表格由 JS 渲染
 └── assets/
     ├── css/styles.css         # 设计变量、版式、组件、响应式与动效
-    ├── js/products.js         # window.SUIWORKS_PRODUCTS，唯一数据源
+    ├── js/products.js         # window.LAOSHI_PRODUCTS，唯一数据源
     ├── js/app.js              # 渲染、筛选、抽屉、深链接、菜单、揭示动画
-    ├── brand/                 # 岁序工坊印记、六件作品图标
+    ├── brand/                 # 师说印记、六件作品图标
     └── shots/                 # 岁音、岁岁时光、厨房界面截图
 ```
 
@@ -131,21 +133,23 @@ docs/prototype/
 原型确认后，纯静态工程已落地：
 
 ```text
-SuiWorks/
+Laoshi/
 ├── content/  # 作品内容与类型
 ├── src/      # Vue 3 页面、组件、路由与样式
 ├── public/   # 品牌图标与截图
 ├── scripts/  # 内容/产物检查、预览与部署归档
 ├── tests/    # Chrome 端到端验证
-├── deploy/   # Nginx 模板与部署说明
-└── docs/     # 原型与架构文档
+├── deploy/   # Nginx 模板、API systemd/env 示例与部署说明
+├── server/   # Go API、PostgreSQL 迁移、OpenAPI 与 sqlc 查询
+└── docs/     # 原型归档与架构文档
 ```
 
 - Vue 3 将原型拆为首页、六个作品详情页和关于页，同时保留原生 dialog 快捷预览。
 - `content/works.ts` 是正式站唯一作品数据源，构建期生成详情页、下载索引和页面元数据。
 - Vite SSG 在本地或 CI 生成静态产物；服务器只通过 Nginx 托管，不安装 Node 运行时。
-- `npm run package:deploy` 生成包含 `web/`、Nginx 模板、部署说明和版本元数据的归档。
-- 不创建 `server/`，不安装 MySQL 或 Redis；需要在线编辑、用户账号或跨设备同步时再评估后端。
+- `npm run package:deploy` 生成纯静态归档；`npm run package:deploy:api` 显式追加 Linux Go API、迁移 SQL、OpenAPI 与运行模板。
+- 当前 Go 模块化单体首先实现岁岁时光认证和同步；不以旧 sync-server 作为架构基础。
+- 旧同步服务仅作业务参考；桌面和移动客户端通过各自 API adapter 接入版本化 API。
 
 完整方案见 [`architecture.md`](architecture.md)，可视化架构图见 [`architecture/overview.html`](architecture/overview.html)。
 
@@ -166,7 +170,7 @@ SuiWorks/
 ## 已知限制与待确认
 
 - 真实安装包、官网地址与下载托管尚未接入。
-- 岁序工坊印记与岁岁食光小厨房标志为占位素材。
+- 门户印记已统一为“师”字；岁岁食光小厨房标志仍为占位素材。
 - 课思库、智链中枢、岁影暂无门户用界面截图，使用统一留白占位，不伪造素材。
 - 尚未配置 SEO 分享图、统计分析与正式许可证。
-- 岁序工坊名称与 Sui 公链无关联，详见根目录 [`README.md`](../README.md)。
+- 师说品牌理念、域名与上线准备说明见根目录 [`README.md`](../README.md)。

@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="suiworks-mark-title">
-  <title id="suiworks-mark-title">岁序工坊 SuiWorks</title>
-  <rect width="64" height="64" rx="8" fill="#B33A2B"/>
-  <rect x="5" y="5" width="54" height="54" rx="5" fill="none" stroke="#F5EFE3" stroke-width="1.2" opacity=".55"/>
-  <path d="M14 13h36M14 51h36" stroke="#F5EFE3" stroke-width="1" opacity=".3"/>
-  <text x="32" y="42" text-anchor="middle" font-family="Songti SC, STSong, Noto Serif SC, serif" font-size="30" font-weight="600" fill="#F5EFE3">序</text>
-</svg>

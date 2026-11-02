@@ -6,6 +6,12 @@ test('首页筛选、预览与详情导航', async ({ page }) => {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   await page.goto('/')
+  await expect(page).toHaveTitle('个人软件作品集 · 师说 Laoshi')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('终身求知，以诚对话。')
+  await expect(page.getByRole('link', { name: '师说 Laoshi 首页' })).toBeVisible()
+  await expect(page.locator('.hero-seal')).toHaveAttribute('alt', '师说印记')
+  await expect(page.locator('.hero-seal')).toBeVisible()
+  await expect.poll(() => page.locator('.hero-seal').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await expect(page.locator('.work-card')).toHaveCount(6)
   await page.getByRole('button', { name: '移动端 2' }).click()
   await expect(page.locator('.work-card')).toHaveCount(2)
@@ -33,7 +39,7 @@ test('所有详情、关于、旧深链与无效地址', async ({ page }) => {
     expect(broken.filter(image => image?.startsWith('/brand/'))).toEqual([])
   }
   await page.goto('/about/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('关于岁序工坊')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('关于师说')
   await page.goto('/#product=suimelody')
   await expect(page).toHaveURL(/\/work\/suimelody\/$/)
   if (!process.env.TEST_URL) {
@@ -62,14 +68,14 @@ test('手机菜单、减少动效与布局', async ({ page }) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
   await page.goto('/')
-  await page.screenshot({ path: '/tmp/suiworks-app-mobile.png', fullPage: true })
+  await page.screenshot({ path: '/tmp/laoshi-app-mobile.png', fullPage: true })
 })
 
 test('桌面布局与无脚本预渲染', async ({ page, browser }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: '/tmp/suiworks-app-desktop.png', fullPage: true })
+  await page.screenshot({ path: '/tmp/laoshi-app-desktop.png', fullPage: true })
   if (!process.env.TEST_URL) {
     const context = await browser.newContext({ javaScriptEnabled: false })
     const staticPage = await context.newPage()

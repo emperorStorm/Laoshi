@@ -1,4 +1,4 @@
-/* SuiWorks prototype data.
+/* Laoshi prototype data.
    This file is loaded as a classic script so the prototype also works from file://. */
 (function () {
   const repo = (name) => `https://github.com/emperorStorm/${name}`;
@@ -244,5 +244,5 @@
     }
   ];
 
-  window.SUIWORKS_PRODUCTS = products;
+  window.LAOSHI_PRODUCTS = products;
 })();

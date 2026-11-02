@@ -1,8 +1,8 @@
-/* SuiWorks prototype interactions. Classic script: works from file:// too. */
+/* Laoshi prototype interactions. Classic script: works from file:// too. */
 (function () {
   'use strict';
 
-  const products = Array.isArray(window.SUIWORKS_PRODUCTS) ? window.SUIWORKS_PRODUCTS : [];
+  const products = Array.isArray(window.LAOSHI_PRODUCTS) ? window.LAOSHI_PRODUCTS : [];
   const bySlug = new Map(products.map((product) => [product.slug, product]));
 
   const grid = document.getElementById('works-grid');
