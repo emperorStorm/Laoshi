@@ -17,6 +17,8 @@ func TestClientEntityContracts(t *testing.T) {
 		{"task", "task", `{"title":"事项","status":"todo","notes":"","createdAt":10,"plannedTime":null,"parentTaskId":null}`},
 		{"task", "repeating", `{"title":"重复事项","status":"done","repeatRule":"{\"kind\":\"weekly_slots\",\"weekdays\":[2]}","occurrenceOverrides":"{\"2026-01-01\":{\"status\":\"done\",\"notes\":\"\"}}"}`},
 		{"task", "point", `{"title":"时间点事项","status":"todo","scheduleKind":"point","plannedDate":"2026-01-01","plannedTime":"09:00"}`},
+		{"task", "legacy-point", `{"title":"报销提醒","status":"todo","scheduleKind":"point","plannedDate":null,"plannedTime":"09:00"}`},
+		{"task", "legacy-range", `{"title":"历史事项","status":"todo","scheduleKind":"range","plannedDate":"2026-01-01","plannedTime":null,"plannedEndTime":null}`},
 		{"task", "range", `{"title":"时间段事项","status":"todo","scheduleKind":"range","plannedDate":"2026-01-01","plannedTime":"09:00","plannedEndTime":"10:00"}`},
 		{"anniversary", "ann", `{"title":"纪念日","kind":"anniversary","date":"2026-01-01","notes":"","photos":[],"coverIndex":0,"createdAt":10}`},
 		{"anniversary_record", "ann@2026-01-01", `{"anniversaryId":"ann","date":"2026-01-01","title":"纪念日","kind":"anniversary","originalDate":"2025-01-01","notes":"","confirmedAt":null,"createdAt":10}`},
@@ -40,6 +42,17 @@ func TestClientEntityContracts(t *testing.T) {
 	}
 }
 
+func TestIncompleteTaskSchedulePreservesFields(t *testing.T) {
+	input := candidate("task", "legacy", `{"title":"报销提醒","status":"todo","scheduleKind":"point","plannedDate":null,"plannedTime":"09:00","plannedEndTime":null}`)
+	got, err := normalizeChange(input, "device", 1000, 6<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Data["scheduleKind"] != "point" || got.Data["plannedDate"] != nil || got.Data["plannedTime"] != "09:00" || got.Data["plannedEndTime"] != nil {
+		t.Fatalf("schedule fields changed: %v", got.Data)
+	}
+}
+
 func TestInvalidEntityFields(t *testing.T) {
 	cases := []struct{ entity, id, data string }{
 		{"task", "t", `{"title":"x","status":"unknown"}`},
@@ -50,9 +63,8 @@ func TestInvalidEntityFields(t *testing.T) {
 		{"task", "t", `{"title":"x","status":"todo","sortOrder":1.2}`},
 		{"task", "t", `{"title":"x","status":"todo","repeatRule":"[]"}`},
 		{"task", "t", `{"title":"x","status":"todo","occurrenceOverrides":"[]"}`},
-		{"task", "t", `{"title":"x","status":"todo","scheduleKind":"point","plannedTime":"09:00"}`},
-		{"task", "t", `{"title":"x","status":"todo","scheduleKind":"range","plannedDate":"2026-01-01","plannedTime":"09:00"}`},
-		{"task", "t", `{"title":"x","status":"todo","scheduleKind":"range"}`},
+		{"task", "t", `{"title":"x","status":"todo","plannedDate":"2026-02-30"}`},
+		{"task", "t", `{"title":"x","status":"todo","plannedTime":"25:00"}`},
 		{"anniversary", "a", `{"title":"x","kind":"fake","date":"2026-01-01"}`},
 		{"anniversary", "a", `{"title":"x","kind":"birthday","date":"2026-02-30"}`},
 		{"anniversary", "a", `{"title":"x","kind":"birthday","date":"2026-01-01","pinned":1}`},

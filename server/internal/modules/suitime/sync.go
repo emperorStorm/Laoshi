@@ -26,9 +26,23 @@ type pushResponse struct {
 }
 
 func (s *Service) syncState(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userKey).(string)
+	ctx := r.Context()
+	userID := ctx.Value(userKey).(string)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	defer tx.Rollback(ctx)
+	if err = lockUser(ctx, tx, userID, true); err != nil {
+		s.internal(w, err)
+		return
+	}
+	if !s.requireNoInit(w, ctx, tx, userID) {
+		return
+	}
 	counts := map[string]int64{"category": 0, "task": 0, "anniversary": 0, "anniversary_record": 0, "setting": 0}
-	rows, err := s.pool.Query(r.Context(), `SELECT entity,count(*) FROM sui_time.sync_entities WHERE user_id=$1 AND deleted_at IS NULL GROUP BY entity`, userID)
+	rows, err := tx.Query(ctx, `SELECT entity,count(*) FROM sui_time.sync_entities WHERE user_id=$1 AND deleted_at IS NULL GROUP BY entity`, userID)
 	if err != nil {
 		s.internal(w, err)
 		return
@@ -50,7 +64,11 @@ func (s *Service) syncState(w http.ResponseWriter, r *http.Request) {
 	// Tombstones make a remote account nonempty too: upload must not resurrect
 	// data from a previously used account after its last live row was deleted.
 	var exists bool
-	if err := s.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM sui_time.sync_entities WHERE user_id=$1)`, userID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sui_time.sync_entities WHERE user_id=$1)`, userID).Scan(&exists); err != nil {
+		s.internal(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
 		s.internal(w, err)
 		return
 	}
@@ -60,6 +78,21 @@ func (s *Service) syncState(w http.ResponseWriter, r *http.Request) {
 func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 	var input pushRequest
 	if !decode(w, r, &input) {
+		return
+	}
+	ctx := r.Context()
+	userID := ctx.Value(userKey).(string)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	defer tx.Rollback(ctx)
+	if err = lockUser(ctx, tx, userID, false); err != nil {
+		s.internal(w, err)
+		return
+	}
+	if !s.requireNoInit(w, ctx, tx, userID) {
 		return
 	}
 	if !validDevice(input.DeviceID) || input.Changes == nil || len(input.Changes) > 200 {
@@ -83,18 +116,6 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		normalized[i] = value
-	}
-	ctx := r.Context()
-	userID := ctx.Value(userKey).(string)
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	defer tx.Rollback(ctx)
-	if err = lockUser(ctx, tx, userID, false); err != nil {
-		s.internal(w, err)
-		return
 	}
 	q := db.New(tx)
 	if input.RequireEmpty {
@@ -152,16 +173,6 @@ func (s *Service) push(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) pull(w http.ResponseWriter, r *http.Request) {
-	cursor, err := readCursor(r.URL.Query().Get("cursor"))
-	if err != nil {
-		fail(w, 422, "validation_failed", "cursor 必须是非负整数")
-		return
-	}
-	limit, err := readLimit(r.URL.Query().Get("limit"))
-	if err != nil {
-		fail(w, 422, "validation_failed", "limit 必须是正整数")
-		return
-	}
 	ctx := r.Context()
 	userID := ctx.Value(userKey).(string)
 	tx, err := s.pool.Begin(ctx)
@@ -174,6 +185,19 @@ func (s *Service) pull(w http.ResponseWriter, r *http.Request) {
 	// pushes; exclusive per-user push locks also order committed sequence numbers.
 	if err = lockUser(ctx, tx, userID, true); err != nil {
 		s.internal(w, err)
+		return
+	}
+	if !s.requireNoInit(w, ctx, tx, userID) {
+		return
+	}
+	cursor, err := readCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		fail(w, 422, "validation_failed", "cursor 必须是非负整数")
+		return
+	}
+	limit, err := readLimit(r.URL.Query().Get("limit"))
+	if err != nil {
+		fail(w, 422, "validation_failed", "limit 必须是正整数")
 		return
 	}
 	q := db.New(tx)

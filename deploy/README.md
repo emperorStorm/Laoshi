@@ -134,11 +134,10 @@ TLS 上线后对真实 HTTPS 域名重复检查，并用一个实际 `/assets/�
 
 主站仍由 Nginx 直接读取静态文件。客户端访问 `https://laoshi.chat/api/v1/...` 时，Nginx 将完整路径转给本机 `127.0.0.1:8787` 上的 Go 服务；Go 再访问 PostgreSQL。数据库和 8787 端口不对公网开放。认证入口为 `/api/v1/auth/...`，岁岁时光同步入口为 `/api/v1/sui-time/sync/...`。
 
-本地安装 Go 1.23 或更新版本后，生成带 Linux API 二进制的完整包：
+当前服务器已确认是 Linux x86_64。后续打包仅生成 `linux/amd64` 完整包，无需额外生成 ARM64 包。本地安装 Go 1.23 或更新版本后执行：
 
 ```bash
-SITE_URL=https://laoshi.chat npm run package:deploy:api
-# ARM64 服务器需额外设置 GOARCH=arm64，默认是 amd64。
+SITE_URL=https://laoshi.chat GOARCH=amd64 npm run package:deploy:api
 ```
 
 完整包额外包含 `api/laoshi-api`、`api/db/migrations/`、`api/api/openapi.yaml`、`deploy/laoshi-api.service` 和 `deploy/laoshi-api.env.example`。没有真实环境文件、数据库数据、证书或密钥。构建失败会阻断打包。静态包不包含 API，启用 API 后切换 current 必须使用完整包，避免服务下次启动时找不到二进制。
@@ -176,4 +175,4 @@ sudo journalctl -u laoshi-api -n 50 --no-pager
 
 可交给服务器 AI 的提示词：
 
-> 请在当前 ECS 部署 Laoshi 完整发布包，保留现有主站和历史版本。先只读核对系统架构、Nginx 配置、PostgreSQL、主站 DNS 与 laoshi.chat 证书，确认包中的 release.json。按本说明配置本机 PostgreSQL 和 laoshi-api systemd 服务，真实密钥只放服务器私有环境文件。执行备份、增量迁移、完整包原子切换和健康检查，nginx -t 成功后再 reload，最后验证主站、API JSON 401 和双端同步。不要删除历史数据，不开放数据库和 8787 公网端口；执行有破坏性的操作前先说明并停止。
+> 请在当前 ECS 部署 Laoshi 的 Linux x86_64（amd64）完整发布包，保留现有主站和历史版本。先只读核对系统架构为 x86_64、包中 release.json 的 api.goarch 为 amd64，以及 Nginx 配置、PostgreSQL、主站 DNS 与 laoshi.chat 证书；如架构不符，请停止部署。按本说明配置本机 PostgreSQL 和 laoshi-api systemd 服务，真实密钥只放服务器私有环境文件。执行备份、增量迁移、完整包原子切换和健康检查，nginx -t 成功后再 reload，最后验证主站、API JSON 401 和双端同步。不要删除历史数据，不开放数据库和 8787 公网端口；执行有破坏性的操作前先说明并停止。

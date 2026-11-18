@@ -128,6 +128,7 @@ func TestPostgresSyncAndAuth(t *testing.T) {
 	a := registerTest(t, base, "用户甲")
 	b := registerTest(t, base, "用户乙")
 	callAPI(t, base, "", "POST", "/api/v1/auth/register", credentials{Username: "用户甲", Password: "password123", DeviceID: "mobile"}, 409)
+	callAPI(t, base, "", "POST", "/api/v1/auth/register", credentials{Username: "用户!甲", Password: "password123", DeviceID: "mobile"}, 422)
 	callAPI(t, base, "", "POST", "/api/v1/auth/login", credentials{Username: "用户甲", Password: "wrongpass", DeviceID: "mobile"}, 401)
 	callAPI(t, base, a.Token, "GET", "/api/v1/auth/me", nil, 200)
 	callAPI(t, base, "", "GET", "/api/v1/sui-time/sync/state", nil, 401)
