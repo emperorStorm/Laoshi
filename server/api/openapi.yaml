@@ -306,5 +306,7 @@ components:
             show_completed.tasks/week/month are booleans; desktop.last_task_category
             is an ID string; desktop.last_task_priority is a priority enum;
             mobile.collapsed_groups is an array; mobile.profile and
-            mobile.new_task_defaults are objects. Tombstones allow null/missing.
+            mobile.new_task_defaults are objects; mobile.task_filters is an object
+            {time: all|today|tomorrow|three_days|week|month, types: 1-3 unique values
+            of schedule|list|repeat}. Tombstones allow null/missing.
         createdAt: { $ref: '#/components/schemas/Timestamp' }

@@ -22,6 +22,7 @@ func TestClientEntityContracts(t *testing.T) {
 		{"anniversary_record", "ann@2026-01-01", `{"anniversaryId":"ann","date":"2026-01-01","title":"纪念日","kind":"anniversary","originalDate":"2025-01-01","notes":"","confirmedAt":null,"createdAt":10}`},
 		{"setting", "show_completed.tasks", `{"value":true,"createdAt":10}`},
 		{"setting", "mobile.profile", `{"value":{"name":"用户"}}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"week","types":["schedule","repeat"]}}`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.id, func(t *testing.T) {
@@ -59,6 +60,12 @@ func TestInvalidEntityFields(t *testing.T) {
 		{"anniversary", "a", `{"title":"x","kind":"birthday","date":"2026-01-01","photos":["https://example.com/a.jpg"]}`},
 		{"anniversary_record", "wrong", `{"anniversaryId":"a","date":"2026-01-01","title":"x","kind":"birthday","originalDate":"2025-01-01"}`},
 		{"setting", "show_completed.tasks", `{"value":"yes"}`},
+		{"setting", "mobile.task_filters", `{"value":"week"}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"year","types":["schedule"]}}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"week","types":[]}}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"week","types":["schedule","schedule"]}}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"week","types":["unknown"]}}`},
+		{"setting", "mobile.task_filters", `{"value":{"time":"week","types":["schedule",1]}}`},
 		{"setting", "secret", `{"value":true}`},
 	}
 	for i, tt := range cases {

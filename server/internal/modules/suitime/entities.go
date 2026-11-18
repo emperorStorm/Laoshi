@@ -396,6 +396,28 @@ func validateSetting(id string, value any, deleted bool) error {
 				return fmt.Errorf("分组偏好必须为数组")
 			}
 		}
+	case "mobile.task_filters":
+		if !deleted {
+			filters, ok := value.(map[string]any)
+			if !ok {
+				return fmt.Errorf("筛选偏好必须为对象")
+			}
+			if !oneOf(filters["time"], "all", "today", "tomorrow", "three_days", "week", "month") {
+				return fmt.Errorf("筛选时间范围无效")
+			}
+			types, ok := filters["types"].([]any)
+			if !ok || len(types) < 1 || len(types) > 3 {
+				return fmt.Errorf("筛选类型必须为 1 到 3 项")
+			}
+			seen := make(map[string]bool, len(types))
+			for _, item := range types {
+				text, ok := item.(string)
+				if !ok || !oneOf(text, "schedule", "list", "repeat") || seen[text] {
+					return fmt.Errorf("筛选类型无效")
+				}
+				seen[text] = true
+			}
+		}
 	case "mobile.profile", "mobile.new_task_defaults":
 		if !deleted {
 			if _, ok := value.(map[string]any); !ok {
