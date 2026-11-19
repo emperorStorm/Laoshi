@@ -119,6 +119,8 @@ jobs:
   deploy-web:
     needs: [detect, deploy-api]
     if: |
+      !cancelled() &&
+      needs.detect.result == 'success' &&
       needs.detect.outputs.web == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
