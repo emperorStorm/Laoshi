@@ -176,3 +176,26 @@ sudo journalctl -u laoshi-api -n 50 --no-pager
 可交给服务器 AI 的提示词：
 
 > 请在当前 ECS 部署 Laoshi 的 Linux x86_64（amd64）完整发布包，保留现有主站和历史版本。先只读核对系统架构为 x86_64、包中 release.json 的 api.goarch 为 amd64，以及 Nginx 配置、PostgreSQL、主站 DNS 与 laoshi.chat 证书；如架构不符，请停止部署。按本说明配置本机 PostgreSQL 和 laoshi-api systemd 服务，真实密钥只放服务器私有环境文件。执行备份、增量迁移、完整包原子切换和健康检查，nginx -t 成功后再 reload，最后验证主站、API JSON 401 和双端同步。不要删除历史数据，不开放数据库和 8787 公网端口；执行有破坏性的操作前先说明并停止。
+
+## 8. GitHub Actions 自动部署
+
+推送 `v*` tag 时自动构建并部署；tag 必须与 `package.json` 的版本一致，例如 `package.json` 为 `1.2.0` 时推 `v1.2.0`。工作流按上一个 tag 到当前 tag 的改动路径判断：
+
+- `server/**`：构建并部署 Go API
+- `src/**`、`content/**`、`public/**`、`index.html`、`vite.config.ts`、`tsconfig.json`、`package.json`、`package-lock.json`、`scripts/**`：构建并部署静态前端
+- `docs/**`、`README.md`、`deploy/README.md`：不部署
+- `deploy/nginx/**`、systemd/env 示例：只提示，不自动应用
+
+前后端都变更时先发 API、再发前端；API 失败则前端不发布。前端切换不 reload Nginx；API 继续使用 `pg_dump` 备份、内嵌迁移、原子切换和健康检查。数据库迁移不会自动回退，迁移要保持向后兼容。
+
+服务器前置（一次性）：
+
+- 前端发布目录已迁移到 `/opt/laoshi/current`，Nginx root 为 `/opt/laoshi/current/web`
+- `deploy` 用户通过专用密钥登录，只能免密执行 `/usr/local/sbin/laoshi-deploy-api` 和 `/usr/local/sbin/laoshi-deploy-web`
+- `/home/package` 由 `deploy` 可写
+- GitHub Secrets：`DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`
+
+手工回滚：Actions → deploy → Run workflow，选择旧 tag 作为运行 ref，`component=both`。前端可直接切回旧 release；后端回滚前先确认旧二进制与当前数据库 schema 兼容。
+
+手动发布入口与 dry-run：同一工作流支持 `workflow_dispatch`，`dry_run=true` 只构建和校验，不切换线上。
+

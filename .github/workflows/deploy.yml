@@ -1,0 +1,154 @@
+name: deploy
+
+# tag v* 触发：按路径判断前后端，后端先发、前端后发。
+# 手动回滚：Actions -> deploy -> Run workflow，选择旧 tag 作为运行 ref，component=both。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'auto / api / web / both'
+        type: choice
+        options: [auto, api, web, both]
+        default: auto
+      version:
+        description: '手动指定版本，如 v1.2.0；在 tag ref 上运行可留空'
+        required: false
+        type: string
+      dry_run:
+        description: '只构建/校验，不实际切换'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: laoshi-production
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://laoshi.chat
+  GOPROXY: https://goproxy.cn,direct
+  LAOSHI_DEPLOY_HOST: 114.55.112.83
+  LAOSHI_DEPLOY_USER: deploy
+  LAOSHI_REMOTE_INBOX: /home/package
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.detect.outputs.api }}
+      web: ${{ steps.detect.outputs.web }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 校验版本与运行方式
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME}}"
+          [[ "$version" == v* ]] || { echo "版本必须形如 v1.2.0，实际：$version"; exit 1; }
+          pkg=$(python3 -c 'import json;print(json.load(open("package.json"))["version"])')
+          [[ "$version" == "v$pkg" ]] || { echo "版本 $version 与 package.json v$pkg 不一致"; exit 1; }
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF_TYPE" != "tag" && "$DRY_RUN" != "true" ]]; then
+            echo "手动部署请选择 tag 作为运行 ref；dry-run 可以在分支运行。" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: 判断前后端变更
+        id: detect
+        env:
+          FORCE: ${{ inputs.component || 'auto' }}
+          HEAD_REF: ${{ github.sha }}
+        run: bash scripts/ci/detect-changes.sh
+
+      - name: 配置变更提醒
+        if: steps.detect.outputs.config == 'true'
+        run: echo "::warning::deploy/nginx 或 laoshi-api 配置文件有变化，工作流不会自动应用，请人工检查。"
+
+      - name: 没有可部署变更
+        if: steps.detect.outputs.api != 'true' && steps.detect.outputs.web != 'true'
+        run: echo "本次没有前后端代码变化，跳过部署。"
+
+  deploy-api:
+    needs: detect
+    if: needs.detect.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: server/go.sum
+
+      - name: 安装部署密钥
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" || { echo "缺少 DEPLOY_SSH_KEY"; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo "缺少 DEPLOY_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/laoshi_deploy_ed25519"
+          chmod 600 "$HOME/.ssh/laoshi_deploy_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: 构建并部署后端
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          args=(--version "$VERSION" --build)
+          if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
+          bash scripts/ci/deploy-api.sh "${args[@]}"
+
+  deploy-web:
+    needs: [detect, deploy-api]
+    if: |
+      needs.detect.outputs.web == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装部署密钥
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" || { echo "缺少 DEPLOY_SSH_KEY"; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo "缺少 DEPLOY_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/laoshi_deploy_ed25519"
+          chmod 600 "$HOME/.ssh/laoshi_deploy_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: 构建并部署前端
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          args=(--version "$VERSION" --build)
+          if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
+          bash scripts/ci/deploy-web.sh "${args[@]}"
