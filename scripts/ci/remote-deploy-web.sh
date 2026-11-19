@@ -125,7 +125,9 @@ ACTUAL=${ACTUAL%% *}
 [[ $EXPECTED == "$ACTUAL" ]] || fail "SHA256 不匹配：期望 $EXPECTED，实际 $ACTUAL"
 
 RELEASE_DIR="$RELEASES_DIR/$VERSION"
-[[ ! -e $RELEASE_DIR ]] || fail "版本目录已存在，拒绝覆盖：$RELEASE_DIR"
+if (( DRY == 0 )); then
+  [[ ! -e $RELEASE_DIR ]] || fail "版本目录已存在，拒绝覆盖：$RELEASE_DIR"
+fi
 
 AVAIL_KB=$(df -Pk "$WEB_ROOT" | awk 'NR==2{print $4}')
 [[ $AVAIL_KB =~ ^[0-9]+$ ]] || fail "无法读取磁盘可用空间"
