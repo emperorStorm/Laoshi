@@ -84,41 +84,43 @@ import type { Work } from './types'
       slug: 'sui-time',
       nameZh: '岁岁时光',
       nameEn: 'sui-time',
-      version: '0.6.4',
+      version: '0.7.10',
       category: 'desktop',
       categoryLabel: '桌面端',
       localFirst: true,
       tagline: '本地优先的个人待办与时间规划应用',
-      summary: '把待办放回时间轴上，让每天的计划有迹可循。',
+      summary: '把每天的事项放回时间轴：三视图联动、跨日期拖放，计划、重复事项与纪念日都留在本机。',
       features: [
-        '四象限待办与优先级',
-        '周计划、月计划与跨日期拖放',
-        '日 / 周 / 月 / 年 / 记忆曲线等重复规则',
-        '子事项与最多三个提醒',
-        '加密备份',
-        '应用内更新'
+        '全部事项、我的一周、我的一月三视图，支持跨日期与分类拖放',
+        '时间与类型筛选：今日至本月，日程、清单与重复事项',
+        '四象限优先级、备注、子事项与最多三个提醒',
+        '日、周、月、年、记忆曲线等重复规则，单次实例可独立调整',
+        '未完成的一次性逾期待办自动顺延到当天',
+        '纪念日：倒计时、生日、节日与周年，支持农历、生肖星座、照片与置顶',
+        'Argon2 + AES-256-GCM 加密备份、应用内更新；桌面与安卓账号同步（内测）'
       ],
-      featureTags: ['四象限', '周月计划', '重复规则', '本地加密'],
+      featureTags: ['三视图', '跨日拖放', '记忆曲线', '纪念日'],
       platforms: ['Windows', 'macOS', 'Android'],
-      stack: ['Tauri 2', 'Rust', 'SQLite', 'Vue 3', 'UniApp', 'Argon2'],
+      stack: ['Tauri 2', 'Rust', 'SQLite', 'Vue 3', 'TypeScript', 'UniApp', 'Argon2'],
       accent: '#2E5A4C',
       accentSoft: '#e5efeb',
-      logo: '/brand/sui-time.png',
+      logo: '/brand/sui-time.svg',
       logoAlt: '岁岁时光应用图标',
       shots: [
-        { src: '/shots/sui-time-about.png', alt: '岁岁时光关于页界面', width: 1200, height: 818 },
-        { src: '/shots/sui-time-month.png', alt: '岁岁时光月计划界面', width: 1200, height: 818 }
+        { src: '/shots/sui-time-all.png', alt: '岁岁时光全部事项界面', width: 1360, height: 900 },
+        { src: '/shots/sui-time-month.png', alt: '岁岁时光我的一月界面', width: 1360, height: 900 },
+        { src: '/shots/sui-time-anniversary.png', alt: '岁岁时光纪念日界面', width: 1360, height: 900 }
       ],
       links: {
         repo: repo('sui-time'),
         releases: releases('sui-time'),
-        demo: null
+        demo: 'https://emperorStorm.github.io/sui-time/'
       },
       download: {
         status: 'available',
         label: '下载',
         url: releases('sui-time'),
-        note: '前往 GitHub Releases 查看可用版本'
+        note: '安装包以 GitHub Releases 为准；在线原型为浏览器演示，数据只保存在本地。'
       }
     },
     {
